@@ -4,7 +4,14 @@ A Neovim plugin for viewing GitLab CI/CD pipeline status in a multi-column float
 
 ## Look and feel
 
-<img width="2448" height="1290" alt="image" src="https://github.com/user-attachments/assets/a86bd6dd-3c74-4ac4-b192-f93f1a433bd3" />
+See active jobs in your pipeline:
+
+<img width="1223" height="629" alt="image" src="https://github.com/user-attachments/assets/c2eecb3a-10b7-45f5-bf9e-deadca756f7e" />
+
+See logs from your jobs in real time:
+
+<img width="1301" height="799" alt="image" src="https://github.com/user-attachments/assets/3f0969a9-1718-4eaf-8f9b-86297bc875d0" />
+
 
 
 ## Requirements
