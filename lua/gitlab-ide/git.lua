@@ -1,4 +1,4 @@
--- Git operations for gitlab-pipeline.nvim
+-- Git operations for gitlab-ide.nvim
 local M = {}
 
 --- Get the current git branch

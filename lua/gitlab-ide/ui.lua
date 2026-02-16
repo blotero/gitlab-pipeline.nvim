@@ -1,6 +1,6 @@
--- Multi-window UI for gitlab-pipeline.nvim
+-- Multi-window UI for gitlab-ide.nvim
 local M = {}
-local api = require("gitlab-pipeline.api")
+local api = require("gitlab-ide.api")
 
 -- Status icons mapping
 local icons = {
@@ -370,7 +370,7 @@ local function render_stage(buf, stage)
   vim.api.nvim_buf_set_option(buf, "modifiable", false)
 
   -- Apply highlights
-  local ns_id = vim.api.nvim_create_namespace("gitlab_pipeline")
+  local ns_id = vim.api.nvim_create_namespace("gitlab_ide")
   vim.api.nvim_buf_clear_namespace(buf, ns_id, 0, -1)
   for _, hl in ipairs(highlights_to_apply) do
     vim.api.nvim_buf_add_highlight(buf, ns_id, hl.hl_group, hl.line, hl.col_start, hl.col_end)

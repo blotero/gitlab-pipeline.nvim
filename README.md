@@ -1,4 +1,4 @@
-# gitlab-pipeline.nvim
+# gitlab-ide.nvim
 
 A Neovim plugin for viewing GitLab CI/CD pipeline status in a multi-column floating window interface.
 
@@ -26,9 +26,9 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 ```lua
 {
-  "your-username/gitlab-pipeline.nvim",
+  "your-username/gitlab-ide.nvim",
   config = function()
-    require("gitlab-pipeline").setup({})
+    require("gitlab-ide").setup({})
   end,
 }
 ```
@@ -37,9 +37,9 @@ Using [packer.nvim](https://github.com/wbthomason/packer.nvim):
 
 ```lua
 use {
-  "your-username/gitlab-pipeline.nvim",
+  "your-username/gitlab-ide.nvim",
   config = function()
-    require("gitlab-pipeline").setup({})
+    require("gitlab-ide").setup({})
   end,
 }
 ```
@@ -55,7 +55,7 @@ Set your GitLab token using one of these methods (in order of priority):
 3. Configuration option `token`
 
 ```lua
-require("gitlab-pipeline").setup({
+require("gitlab-ide").setup({
   -- Optional: specify token directly (not recommended, use env vars instead)
   -- token = "your-gitlab-token",
 
@@ -72,7 +72,7 @@ require("gitlab-pipeline").setup({
 Open a GitLab repository in Neovim and run:
 
 ```vim
-:GitlabPipeline
+:GitlabIdePipeline
 ```
 
 This opens a multi-column floating window showing the pipeline for your current branch. Navigate to any job and press `Enter` to view its log, or use action keys to cancel/retry jobs directly from the UI.

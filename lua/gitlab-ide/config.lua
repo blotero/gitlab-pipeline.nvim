@@ -1,4 +1,4 @@
--- Configuration management for gitlab-pipeline.nvim
+-- Configuration management for gitlab-ide.nvim
 local M = {}
 
 -- Default configuration

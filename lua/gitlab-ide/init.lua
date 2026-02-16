@@ -1,11 +1,11 @@
--- gitlab-pipeline.nvim - GitLab CI/CD pipeline status in Neovim
+-- gitlab-ide.nvim - GitLab CI/CD pipeline status in Neovim
 -- Entry point module
 local M = {}
 
-local config = require("gitlab-pipeline.config")
-local git = require("gitlab-pipeline.git")
-local api = require("gitlab-pipeline.api")
-local ui = require("gitlab-pipeline.ui")
+local config = require("gitlab-ide.config")
+local git = require("gitlab-ide.git")
+local api = require("gitlab-ide.api")
+local ui = require("gitlab-ide.ui")
 
 --- Setup the plugin with user configuration
 ---@param opts table|nil User configuration options
@@ -16,7 +16,7 @@ end
 --- Show an error message to the user
 ---@param msg string Error message
 local function show_error(msg)
-  vim.notify("gitlab-pipeline: " .. msg, vim.log.levels.ERROR)
+  vim.notify("gitlab-ide: " .. msg, vim.log.levels.ERROR)
 end
 
 --- Open the pipeline view for the current repository and branch

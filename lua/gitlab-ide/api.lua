@@ -1,4 +1,4 @@
--- GitLab GraphQL API client for gitlab-pipeline.nvim
+-- GitLab GraphQL API client for gitlab-ide.nvim
 local M = {}
 
 -- GraphQL query for fetching pipeline data
