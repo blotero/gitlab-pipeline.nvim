@@ -127,7 +127,7 @@ function M.render_stage(buf, stage)
 
 	-- Keybinding hints
 	table.insert(lines, "")
-	local hint = " ⏎:log o:open b:branch c:cancel x:retry C/X:pipeline m:MR"
+	local hint = " ⏎:log o:open O:pipeline b:branch c:cancel x:retry C/X:pipeline m:MR"
 	table.insert(lines, hint)
 	table.insert(highlights_to_apply, {
 		line = #lines - 1,
@@ -301,6 +301,25 @@ local function setup_keymaps(buf, state, callbacks)
 			return
 		end
 		vim.ui.open(state.api_context.gitlab_url .. job.webPath)
+	end, opts)
+
+	-- Open pipeline URL in browser
+	vim.keymap.set("n", "O", function()
+		if not state.api_context or not state.pipeline or not state.pipeline.id then
+			vim.notify("Pipeline URL not available", vim.log.levels.ERROR)
+			return
+		end
+		local pipeline_id = state.pipeline.id:match("/(%d+)$")
+		if not pipeline_id then
+			vim.notify("Could not parse pipeline ID", vim.log.levels.ERROR)
+			return
+		end
+		local url = state.api_context.gitlab_url
+			.. "/"
+			.. state.api_context.project_path
+			.. "/-/pipelines/"
+			.. pipeline_id
+		vim.ui.open(url)
 	end, opts)
 
 	-- Switch branch
