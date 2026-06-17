@@ -344,11 +344,15 @@ function M.fetch_branches(gitlab_url, token, project_path, callback)
 	end)
 end
 
--- GraphQL query for fetching open merge requests
+-- GraphQL query for fetching open merge requests (paginated)
 local MR_LIST_QUERY = [[
-query($fullPath: ID!) {
+query($fullPath: ID!, $after: String) {
   project(fullPath: $fullPath) {
-    mergeRequests(state: opened, sort: UPDATED_DESC, first: 50) {
+    mergeRequests(state: opened, sort: UPDATED_DESC, first: 10, after: $after) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
       nodes {
         iid
         title
@@ -432,19 +436,23 @@ query($fullPath: ID!) {
 ---@param gitlab_url string The GitLab base URL
 ---@param token string The GitLab API token
 ---@param project_path string The project path
----@param callback function Callback function(err, merge_requests)
-function M.fetch_merge_requests(gitlab_url, token, project_path, callback)
-	M.request(gitlab_url, token, MR_LIST_QUERY, { fullPath = project_path }, function(err, data)
+---@param callback function Callback function(err, merge_requests, page_info)
+---@param after string|nil Cursor for pagination (nil for first page)
+function M.fetch_merge_requests(gitlab_url, token, project_path, callback, after)
+	local vars = { fullPath = project_path, after = after or vim.NIL }
+	M.request(gitlab_url, token, MR_LIST_QUERY, vars, function(err, data)
 		if err then
-			callback(err, nil)
+			callback(err, nil, nil)
 			return
 		end
 		if not data or not data.project then
-			callback("Project not found: " .. project_path, nil)
+			callback("Project not found: " .. project_path, nil, nil)
 			return
 		end
-		local mrs = data.project.mergeRequests and data.project.mergeRequests.nodes or {}
-		callback(nil, mrs)
+		local conn = data.project.mergeRequests or {}
+		local mrs = conn.nodes or {}
+		local page_info = conn.pageInfo or { hasNextPage = false, endCursor = nil }
+		callback(nil, mrs, page_info)
 	end)
 end
 

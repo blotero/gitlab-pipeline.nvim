@@ -157,12 +157,12 @@ function M.open_merge_requests()
 				api_context.gitlab_url,
 				api_context.token,
 				api_context.project_path,
-				function(err, merge_requests)
+				function(err, merge_requests, page_info)
 					if err then
 						show_error(err)
 						return
 					end
-					mr.open_list(merge_requests, refresh, api_context)
+					mr.open_list(merge_requests, refresh, api_context, page_info)
 				end
 			)
 		end
@@ -171,12 +171,12 @@ function M.open_merge_requests()
 			api_context.gitlab_url,
 			api_context.token,
 			api_context.project_path,
-			function(err, merge_requests)
+			function(err, merge_requests, page_info)
 				if err then
 					show_error(err)
 					return
 				end
-				mr.open_list(merge_requests, refresh, api_context)
+				mr.open_list(merge_requests, refresh, api_context, page_info)
 			end
 		)
 	end)

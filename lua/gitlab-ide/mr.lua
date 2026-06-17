@@ -32,6 +32,8 @@ local state = {
 	api_context = nil,
 	refresh_fn = nil,
 	current_mr = nil,
+	has_next_page = false,
+	next_page_cursor = nil,
 }
 
 --- Get the MR state/display key (accounts for draft)
@@ -173,9 +175,22 @@ local function render_list(buf)
 		table.insert(lines, "  No open merge requests found.")
 	end
 
+	-- Load-more row
+	if state.has_next_page then
+		table.insert(lines, "")
+		local more_line = "  ↓  m:load more"
+		table.insert(lines, more_line)
+		table.insert(highlights_to_apply, {
+			line = #lines - 1,
+			col_start = 0,
+			col_end = #more_line,
+			hl_group = "DiagnosticInfo",
+		})
+	end
+
 	-- Footer hint
 	table.insert(lines, "")
-	local hint = " ⏎:detail a:approve o:browser c:copy r:refresh q/Esc:close"
+	local hint = " ⏎:detail a:approve o:browser c:copy m:more r:refresh q/Esc:close"
 	table.insert(lines, hint)
 	table.insert(highlights_to_apply, {
 		line = #lines - 1,
@@ -270,19 +285,55 @@ local function setup_list_keymaps(buf)
 		vim.fn.setreg("+", mr.webUrl)
 		vim.notify("Copied: " .. mr.webUrl)
 	end, opts)
+
+	-- Load next page
+	vim.keymap.set("n", "m", function()
+		if not state.has_next_page then
+			vim.notify("No more merge requests", vim.log.levels.INFO)
+			return
+		end
+		if not state.api_context then
+			return
+		end
+		local ctx = state.api_context
+		vim.notify("Loading more merge requests…", vim.log.levels.INFO)
+		api.fetch_merge_requests(
+			ctx.gitlab_url,
+			ctx.token,
+			ctx.project_path,
+			function(err, more_mrs, page_info)
+				if err then
+					vim.notify("Load more failed: " .. err, vim.log.levels.ERROR)
+					return
+				end
+				for _, mr in ipairs(more_mrs) do
+					table.insert(state.merge_requests, mr)
+				end
+				state.has_next_page = page_info and page_info.hasNextPage or false
+				state.next_page_cursor = page_info and page_info.endCursor or nil
+				if state.list_buffer and vim.api.nvim_buf_is_valid(state.list_buffer) then
+					render_list(state.list_buffer)
+				end
+			end,
+			state.next_page_cursor
+		)
+	end, opts)
 end
 
 --- Open the MR list view
 ---@param merge_requests table List of merge request data
 ---@param refresh_fn function Function to refresh the list
 ---@param api_context table API context { gitlab_url, token, project_path }
-function M.open_list(merge_requests, refresh_fn, api_context)
+---@param page_info table|nil { hasNextPage, endCursor } from the initial fetch
+function M.open_list(merge_requests, refresh_fn, api_context, page_info)
 	-- Close any existing MR views
 	close_all()
 
 	state.merge_requests = merge_requests
 	state.refresh_fn = refresh_fn
 	state.api_context = api_context
+	state.has_next_page = page_info and page_info.hasNextPage or false
+	state.next_page_cursor = page_info and page_info.endCursor or nil
 
 	-- Calculate dimensions (70% x 60%)
 	local editor_width = vim.o.columns
@@ -309,7 +360,7 @@ function M.open_list(merge_requests, refresh_fn, api_context)
 		border = "rounded",
 		title = " Merge Requests ",
 		title_pos = "center",
-		footer = " ⏎:detail a:approve o:browser r:refresh q:close ",
+		footer = " ⏎:detail a:approve o:browser m:more r:refresh q:close ",
 		footer_pos = "center",
 	})
 
