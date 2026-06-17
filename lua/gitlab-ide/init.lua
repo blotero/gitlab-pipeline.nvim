@@ -152,7 +152,12 @@ function M.open_merge_requests()
 
 		local mr = require("gitlab-ide.mr")
 
-		local function refresh()
+		-- Fetch current user so the "mine" filter knows the username
+		api.fetch_current_user(api_context.gitlab_url, api_context.token, function(user_err, username)
+			if not user_err and username then
+				api_context.username = username
+			end
+
 			api.fetch_merge_requests(
 				api_context.gitlab_url,
 				api_context.token,
@@ -162,23 +167,10 @@ function M.open_merge_requests()
 						show_error(err)
 						return
 					end
-					mr.open_list(merge_requests, refresh, api_context, page_info)
+					mr.open_list(merge_requests, api_context, page_info)
 				end
 			)
-		end
-
-		api.fetch_merge_requests(
-			api_context.gitlab_url,
-			api_context.token,
-			api_context.project_path,
-			function(err, merge_requests, page_info)
-				if err then
-					show_error(err)
-					return
-				end
-				mr.open_list(merge_requests, refresh, api_context, page_info)
-			end
-		)
+		end)
 	end)
 end
 

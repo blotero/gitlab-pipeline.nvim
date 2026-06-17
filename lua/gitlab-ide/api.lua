@@ -344,11 +344,12 @@ function M.fetch_branches(gitlab_url, token, project_path, callback)
 	end)
 end
 
--- GraphQL query for fetching open merge requests (paginated)
+
+-- GraphQL query for fetching merge requests (paginated, filterable)
 local MR_LIST_QUERY = [[
-query($fullPath: ID!, $after: String) {
+query($fullPath: ID!, $after: String, $state: MergeRequestState, $authorUsername: String) {
   project(fullPath: $fullPath) {
-    mergeRequests(state: opened, sort: UPDATED_DESC, first: 10, after: $after) {
+    mergeRequests(state: $state, sort: UPDATED_DESC, first: 10, after: $after, authorUsername: $authorUsername) {
       pageInfo {
         hasNextPage
         endCursor
@@ -432,14 +433,40 @@ query($fullPath: ID!) {
 }
 ]]
 
---- Fetch open merge requests for a project
+--- Fetch the username of the currently authenticated user via REST /api/v4/user
+---@param gitlab_url string The GitLab base URL
+---@param token string The GitLab API token
+---@param callback function Callback function(err, username)
+function M.fetch_current_user(gitlab_url, token, callback)
+	M.rest_request(gitlab_url, token, "GET", "/api/v4/user", function(err, data)
+		if err then
+			callback(err, nil)
+			return
+		end
+		if not data or not data.username then
+			callback("Could not fetch current user", nil)
+			return
+		end
+		callback(nil, data.username)
+	end)
+end
+
+--- Fetch merge requests for a project
 ---@param gitlab_url string The GitLab base URL
 ---@param token string The GitLab API token
 ---@param project_path string The project path
 ---@param callback function Callback function(err, merge_requests, page_info)
 ---@param after string|nil Cursor for pagination (nil for first page)
-function M.fetch_merge_requests(gitlab_url, token, project_path, callback, after)
-	local vars = { fullPath = project_path, after = after or vim.NIL }
+---@param filters table|nil { mr_state: string, author_username: string|nil }
+function M.fetch_merge_requests(gitlab_url, token, project_path, callback, after, filters)
+	filters = filters or {}
+	local mr_state = filters.mr_state or "opened"
+	local vars = {
+		fullPath = project_path,
+		after = after or vim.NIL,
+		state = (mr_state == "all") and vim.NIL or mr_state,
+		authorUsername = filters.author_username or vim.NIL,
+	}
 	M.request(gitlab_url, token, MR_LIST_QUERY, vars, function(err, data)
 		if err then
 			callback(err, nil, nil)

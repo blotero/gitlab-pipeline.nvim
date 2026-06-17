@@ -20,6 +20,9 @@ local mr_highlights = {
 	draft = "DiagnosticWarn",
 }
 
+-- Filter state cycle order
+local MR_STATE_CYCLE = { "opened", "closed", "merged", "all" }
+
 -- MR UI state (separate from pipeline UI state)
 local state = {
 	list_window = nil,
@@ -30,10 +33,11 @@ local state = {
 	create_buffer = nil,
 	merge_requests = {},
 	api_context = nil,
-	refresh_fn = nil,
 	current_mr = nil,
 	has_next_page = false,
 	next_page_cursor = nil,
+	filters = { mr_state = "opened", author_username = nil },
+	current_username = nil,
 }
 
 --- Get the MR state/display key (accounts for draft)
@@ -117,7 +121,24 @@ local function close_all()
 	close_list_view()
 	state.merge_requests = {}
 	state.api_context = nil
-	state.refresh_fn = nil
+	state.filters = { mr_state = "opened", author_username = nil }
+	state.current_username = nil
+end
+
+--- Build the window title reflecting current filters
+local function get_window_title()
+	local parts = { state.filters.mr_state }
+	if state.filters.author_username then
+		table.insert(parts, "mine")
+	end
+	return " Merge Requests · " .. table.concat(parts, " | ") .. " "
+end
+
+--- Update the list window title to reflect current filters
+local function update_window_title()
+	if state.list_window and vim.api.nvim_win_is_valid(state.list_window) then
+		vim.api.nvim_win_set_config(state.list_window, { title = get_window_title(), title_pos = "center" })
+	end
 end
 
 --- Get the MR under cursor in the list view
@@ -172,7 +193,12 @@ local function render_list(buf)
 
 	if #state.merge_requests == 0 then
 		table.insert(lines, "")
-		table.insert(lines, "  No open merge requests found.")
+		local empty_msg = "  No merge requests found"
+		if state.filters.author_username then
+			empty_msg = empty_msg .. " (mine)"
+		end
+		empty_msg = empty_msg .. " for state: " .. state.filters.mr_state
+		table.insert(lines, empty_msg)
 	end
 
 	-- Load-more row
@@ -190,7 +216,7 @@ local function render_list(buf)
 
 	-- Footer hint
 	table.insert(lines, "")
-	local hint = " ⏎:detail a:approve o:browser c:copy m:more r:refresh q/Esc:close"
+	local hint = " ⏎:detail  s:state  u:mine  a:approve  o:browser  c:copy  m:more  r:refresh  q:close"
 	table.insert(lines, hint)
 	table.insert(highlights_to_apply, {
 		line = #lines - 1,
@@ -212,6 +238,38 @@ local function render_list(buf)
 	end
 end
 
+--- Re-fetch MRs from the start using current filters and re-render the list
+local function refresh_list_with_filters()
+	if not state.api_context then
+		return
+	end
+	local ctx = state.api_context
+	state.merge_requests = {}
+	state.has_next_page = false
+	state.next_page_cursor = nil
+	vim.notify("Fetching merge requests…", vim.log.levels.INFO)
+	api.fetch_merge_requests(
+		ctx.gitlab_url,
+		ctx.token,
+		ctx.project_path,
+		function(err, mrs, page_info)
+			if err then
+				vim.notify("gitlab-ide: " .. err, vim.log.levels.ERROR)
+				return
+			end
+			state.merge_requests = mrs
+			state.has_next_page = page_info and page_info.hasNextPage or false
+			state.next_page_cursor = page_info and page_info.endCursor or nil
+			update_window_title()
+			if state.list_buffer and vim.api.nvim_buf_is_valid(state.list_buffer) then
+				render_list(state.list_buffer)
+			end
+		end,
+		nil,
+		state.filters
+	)
+end
+
 --- Set up keymaps for the MR list view
 ---@param buf number Buffer ID
 local function setup_list_keymaps(buf)
@@ -221,11 +279,35 @@ local function setup_list_keymaps(buf)
 	vim.keymap.set("n", "q", close_all, opts)
 	vim.keymap.set("n", "<Esc>", close_all, opts)
 
-	-- Refresh
-	vim.keymap.set("n", "r", function()
-		if state.refresh_fn then
-			state.refresh_fn()
+	-- Refresh with current filters
+	vim.keymap.set("n", "r", refresh_list_with_filters, opts)
+
+	-- Cycle MR state filter: opened → closed → merged → all → opened
+	vim.keymap.set("n", "s", function()
+		local current = state.filters.mr_state
+		local next_state = MR_STATE_CYCLE[1]
+		for i, v in ipairs(MR_STATE_CYCLE) do
+			if v == current then
+				next_state = MR_STATE_CYCLE[(i % #MR_STATE_CYCLE) + 1]
+				break
+			end
 		end
+		state.filters.mr_state = next_state
+		refresh_list_with_filters()
+	end, opts)
+
+	-- Toggle "mine" filter (own MRs only)
+	vim.keymap.set("n", "u", function()
+		if state.filters.author_username then
+			state.filters.author_username = nil
+		else
+			if not state.current_username then
+				vim.notify("gitlab-ide: could not determine current user", vim.log.levels.WARN)
+				return
+			end
+			state.filters.author_username = state.current_username
+		end
+		refresh_list_with_filters()
 	end, opts)
 
 	-- Drill down to detail
@@ -258,9 +340,7 @@ local function setup_list_keymaps(buf)
 					return
 				end
 				vim.notify("MR !" .. mr.iid .. " approved", vim.log.levels.INFO)
-				if state.refresh_fn then
-					state.refresh_fn()
-				end
+				refresh_list_with_filters()
 			end)
 		end)
 	end, opts)
@@ -315,23 +395,25 @@ local function setup_list_keymaps(buf)
 					render_list(state.list_buffer)
 				end
 			end,
-			state.next_page_cursor
+			state.next_page_cursor,
+			state.filters
 		)
 	end, opts)
 end
 
 --- Open the MR list view
 ---@param merge_requests table List of merge request data
----@param refresh_fn function Function to refresh the list
----@param api_context table API context { gitlab_url, token, project_path }
+---@param api_context table API context { gitlab_url, token, project_path, username? }
 ---@param page_info table|nil { hasNextPage, endCursor } from the initial fetch
-function M.open_list(merge_requests, refresh_fn, api_context, page_info)
+---@param initial_filters table|nil { mr_state, author_username }
+function M.open_list(merge_requests, api_context, page_info, initial_filters)
 	-- Close any existing MR views
 	close_all()
 
 	state.merge_requests = merge_requests
-	state.refresh_fn = refresh_fn
 	state.api_context = api_context
+	state.current_username = api_context.username
+	state.filters = initial_filters or { mr_state = "opened", author_username = nil }
 	state.has_next_page = page_info and page_info.hasNextPage or false
 	state.next_page_cursor = page_info and page_info.endCursor or nil
 
@@ -358,9 +440,9 @@ function M.open_list(merge_requests, refresh_fn, api_context, page_info)
 		row = row,
 		style = "minimal",
 		border = "rounded",
-		title = " Merge Requests ",
+		title = get_window_title(),
 		title_pos = "center",
-		footer = " ⏎:detail a:approve o:browser m:more r:refresh q:close ",
+		footer = " s:state  u:mine  ⏎:detail  a:approve  o:browser  m:more  r:refresh  q:close ",
 		footer_pos = "center",
 	})
 
