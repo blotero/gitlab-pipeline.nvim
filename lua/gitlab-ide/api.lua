@@ -1,8 +1,28 @@
 -- GitLab GraphQL API client for gitlab-ide.nvim
 local M = {}
 
+-- Shared job selection: used both for the top-level pipeline and for any
+-- pipeline fetched by id (drill-in into a downstream/child pipeline).
+-- downstreamPipeline is a cheap stub (no nested stages) so bridge jobs carry
+-- their child pipeline's id up front without inflating query complexity;
+-- the full child stages/jobs are only fetched on demand via fetch_pipeline_by_id.
+local JOB_FIELDS = [[
+                id
+                name
+                status
+                kind
+                webPath
+                downstreamPipeline {
+                  id
+                  iid
+                  status
+                  path
+                }
+]]
+
 -- GraphQL query for fetching pipeline data
-local PIPELINE_QUERY = [[
+local PIPELINE_QUERY = string.format(
+	[[
 query($fullPath: ID!, $ref: String) {
   project(fullPath: $fullPath) {
     pipelines(ref: $ref, first: 1) {
@@ -17,10 +37,7 @@ query($fullPath: ID!, $ref: String) {
             status
             jobs {
               nodes {
-                id
-                name
-                status
-                webPath
+%s
               }
             }
           }
@@ -29,7 +46,41 @@ query($fullPath: ID!, $ref: String) {
     }
   }
 }
-]]
+]],
+	JOB_FIELDS
+)
+
+-- GraphQL query for fetching a single pipeline by its iid (used to drill
+-- into a downstream/child pipeline, and to refresh whatever depth is
+-- currently active in the UI). Project.pipeline(id: CiPipelineID) returns
+-- null when passed the full "gid://..." string on gitlab.com, so iid is
+-- used instead - it's already carried by the downstreamPipeline stub.
+local PIPELINE_BY_ID_QUERY = string.format(
+	[[
+query($fullPath: ID!, $iid: ID!) {
+  project(fullPath: $fullPath) {
+    pipeline(iid: $iid) {
+      id
+      iid
+      status
+      createdAt
+      stages {
+        nodes {
+          name
+          status
+          jobs {
+            nodes {
+%s
+            }
+          }
+        }
+      }
+    }
+  }
+}
+]],
+	JOB_FIELDS
+)
 
 --- Make an async GraphQL request to the GitLab API
 ---@param gitlab_url string The GitLab base URL
@@ -136,6 +187,34 @@ function M.fetch_pipeline(gitlab_url, token, project_path, branch, callback)
 
 		local pipeline = pipelines.nodes[1]
 		callback(nil, pipeline)
+	end)
+end
+
+--- Fetch a single pipeline by its iid (used for drilling into a
+--- downstream/child pipeline, and for refreshing whatever depth is active)
+---@param gitlab_url string The GitLab base URL
+---@param token string The GitLab API token
+---@param project_path string The project path (group/project) that owns the pipeline
+---@param pipeline_iid string|number The pipeline's iid within project_path
+---@param callback function Callback function(err, pipeline_data)
+function M.fetch_pipeline_by_id(gitlab_url, token, project_path, pipeline_iid, callback)
+	local variables = {
+		fullPath = project_path,
+		iid = tostring(pipeline_iid),
+	}
+
+	M.request(gitlab_url, token, PIPELINE_BY_ID_QUERY, variables, function(err, data)
+		if err then
+			callback(err, nil)
+			return
+		end
+
+		if not data or not data.project or not data.project.pipeline then
+			callback("Pipeline not found: iid " .. tostring(pipeline_iid), nil)
+			return
+		end
+
+		callback(nil, data.project.pipeline)
 	end)
 end
 

@@ -90,7 +90,8 @@ end
 --- Render a stage buffer with jobs
 ---@param buf number Buffer ID
 ---@param stage table Stage data
-function M.render_stage(buf, stage)
+---@param has_parent boolean|nil Whether a parent pipeline is available to drill back out to
+function M.render_stage(buf, stage, has_parent)
 	local lines = {}
 	local highlights_to_apply = {}
 
@@ -113,6 +114,9 @@ function M.render_stage(buf, stage)
 		for _, job in ipairs(stage.jobs.nodes) do
 			local job_icon = icons.get_icon(job.status)
 			local job_line = string.format("  %s %s", job_icon, job.name)
+			if icons.is_bridge(job) then
+				job_line = job_line .. " " .. icons.bridge_marker
+			end
 			table.insert(lines, job_line)
 
 			-- Add highlight for job icon
@@ -127,7 +131,10 @@ function M.render_stage(buf, stage)
 
 	-- Keybinding hints
 	table.insert(lines, "")
-	local hint = " ⏎:log o:open O:pipeline b:branch c:cancel x:retry C/X:pipeline m:MR"
+	local hint = " ⏎:log/drill o:open O:pipeline b:branch c:cancel x:retry C/X:pipeline m:MR"
+	if has_parent then
+		hint = hint .. " ⌫:up"
+	end
 	table.insert(lines, hint)
 	table.insert(highlights_to_apply, {
 		line = #lines - 1,
@@ -152,7 +159,7 @@ end
 --- Set up keybindings for a pipeline stage buffer
 ---@param buf number Buffer ID
 ---@param state table UI state reference
----@param callbacks table { close, open_log }
+---@param callbacks table { close, open_log, drill_in, drill_out }
 local function setup_keymaps(buf, state, callbacks)
 	local opts = { noremap = true, silent = true, buffer = buf }
 
@@ -172,11 +179,9 @@ local function setup_keymaps(buf, state, callbacks)
 		callbacks.close()
 	end, opts)
 
-	-- Refresh
+	-- Refresh (whichever pipeline depth is currently displayed)
 	vim.keymap.set("n", "r", function()
-		if state.refresh_fn then
-			state.refresh_fn()
-		end
+		callbacks.refresh()
 	end, opts)
 
 	-- Cancel job under cursor
@@ -279,14 +284,23 @@ local function setup_keymaps(buf, state, callbacks)
 		end)
 	end, opts)
 
-	-- Open job log (drill-down)
+	-- Open job log, or drill into a bridge job's downstream pipeline
 	vim.keymap.set("n", "<CR>", function()
 		local job = M.get_job_under_cursor(state)
 		if not job then
 			vim.notify("No job under cursor", vim.log.levels.WARN)
 			return
 		end
-		callbacks.open_log(job)
+		if icons.is_bridge(job) then
+			callbacks.drill_in(job)
+		else
+			callbacks.open_log(job)
+		end
+	end, opts)
+
+	-- Drill back out to the parent pipeline
+	vim.keymap.set("n", "<BS>", function()
+		callbacks.drill_out()
 	end, opts)
 
 	-- Open job URL in browser
@@ -346,7 +360,7 @@ end
 ---@param height number Window height
 ---@param row number Row position
 ---@param state table UI state reference
----@param callbacks table { close, open_log }
+---@param callbacks table { close, open_log, drill_in, drill_out }
 ---@return number win Window ID
 ---@return number buf Buffer ID
 function M.create_stage_window(stage, col, width, height, row, state, callbacks)
@@ -374,7 +388,8 @@ function M.create_stage_window(stage, col, width, height, row, state, callbacks)
 	vim.api.nvim_win_set_option(win, "wrap", false)
 
 	-- Render content
-	M.render_stage(buf, stage)
+	local has_parent = state.pipeline_stack and #state.pipeline_stack > 0
+	M.render_stage(buf, stage, has_parent)
 
 	-- Set up keymaps
 	setup_keymaps(buf, state, callbacks)
