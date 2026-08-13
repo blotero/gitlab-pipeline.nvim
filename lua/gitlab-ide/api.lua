@@ -472,6 +472,12 @@ query($fullPath: ID!, $iid: String!) {
       }
       sourceBranch
       targetBranch
+      sourceProject {
+        fullPath
+      }
+      targetProject {
+        fullPath
+      }
       labels {
         nodes {
           title

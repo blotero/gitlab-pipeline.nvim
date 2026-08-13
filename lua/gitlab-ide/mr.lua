@@ -737,6 +737,15 @@ local function setup_detail_keymaps(buf)
 		end
 		require("gitlab-ide.mr_threads").open(state.current_mr, state.api_context, state.detail_window)
 	end, opts)
+
+	-- Enter review mode: check out the MR branch and diff it against its target
+	vim.keymap.set("n", "C", function()
+		local mr = state.current_mr
+		if not mr then
+			return
+		end
+		require("gitlab-ide.review").start_from_mr(mr, close_all)
+	end, opts)
 end
 
 --- Open the detail view for a merge request
@@ -777,7 +786,7 @@ open_detail_view = function(mr)
 		if #title > width - 4 then
 			title = title:sub(1, width - 7) .. "... "
 		end
-		local footer = " q/⌫:back a:approve o:browser c:copy d:diff r:refresh t:threads Esc:close "
+		local footer = " q/⌫:back a:approve o:browser c:copy d:diff r:refresh t:threads C:review Esc:close "
 		local win = vim.api.nvim_open_win(buf, true, {
 			relative = "editor",
 			width = width,

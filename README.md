@@ -111,8 +111,49 @@ From the MR list, press `Enter` on a merge request to open its detail view.
 | `a` | Approve the MR (with confirmation) |
 | `o` | Open MR in browser |
 | `c` | Copy MR URL to clipboard |
+| `d` | Load diff stats |
 | `r` | Refresh MR detail |
 | `t` | Open discussion threads view |
+| `C` | Enter review mode (check out the branch, diff against target) |
+
+### MR Review Mode
+
+From the MR detail view, press `C` to review the MR in real buffers instead of a
+diff dump: the source branch is fetched and checked out, and the diff base is
+repointed at `merge-base(<remote>/<target branch>, HEAD)`.
+
+That base matters. After a checkout the working tree is clean, so gitsigns shows
+nothing — it diffs against `HEAD`, and `HEAD` is the MR. Repointing the base at
+the merge-base makes the gutter, `]c` / `[c` and the file list describe the MR's
+own changes, while every buffer stays a real file with a live LSP. The merge-base
+is used rather than the target branch itself, so the target's own drift is not
+mistaken for part of the MR.
+
+Requires [gitsigns.nvim](https://github.com/lewis6991/gitsigns.nvim) for the
+gutter signs. [diffview.nvim](https://github.com/sindrets/diffview.nvim) is used
+for the file list when installed, otherwise the gitsigns quickfix list is.
+Neither is a hard dependency.
+
+| Command | Action |
+|---------|--------|
+| `:GitlabIdeReview [ref]` | Review the current checkout against `ref` (default: the remote's default branch) |
+| `:GitlabIdeReviewStop` | Reset the diff base to `HEAD` |
+
+`:GitlabIdeReviewStop` leaves the branch checked out, so reading can continue.
+
+Review mode refuses to start when the working tree is dirty, when a local branch
+of the same name holds commits the remote does not have, or when the MR comes
+from a fork (not supported yet).
+
+```lua
+require("gitlab-ide").setup({
+  review = {
+    strategy = "checkout", -- "checkout" | "worktree" (not implemented yet)
+    view = "auto",         -- "auto" | "diffview" | "quickfix" | "none"
+    auto_fetch = true,     -- Fetch source and target branches before checking out
+  },
+})
+```
 
 ### MR Threads View Keybindings
 

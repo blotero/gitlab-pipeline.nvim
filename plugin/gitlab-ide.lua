@@ -52,3 +52,33 @@ vim.api.nvim_create_user_command("GitlabIdeIssues", function()
 end, {
 	desc = "Open GitLab IDE issues assigned to current user",
 })
+
+-- Register the :GitlabIdeReview command
+vim.api.nvim_create_user_command("GitlabIdeReview", function(opts)
+	require("gitlab-ide").review_start(opts.args ~= "" and opts.args or nil)
+end, {
+	desc = "Enter review mode: diff the current checkout against a target ref",
+	nargs = "?",
+	complete = function(arg_lead)
+		local refs = vim.fn.systemlist({
+			"git",
+			"for-each-ref",
+			"--format=%(refname:short)",
+			"refs/remotes",
+			"refs/heads",
+		})
+		if vim.v.shell_error ~= 0 then
+			return {}
+		end
+		return vim.tbl_filter(function(ref)
+			return ref:find(arg_lead, 1, true) == 1
+		end, refs)
+	end,
+})
+
+-- Register the :GitlabIdeReviewStop command
+vim.api.nvim_create_user_command("GitlabIdeReviewStop", function()
+	require("gitlab-ide").review_stop()
+end, {
+	desc = "Leave review mode and reset the diff base to HEAD",
+})

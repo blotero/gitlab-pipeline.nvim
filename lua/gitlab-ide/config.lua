@@ -5,6 +5,11 @@ local M = {}
 local defaults = {
 	remote = "origin",
 	gitlab_url = nil, -- Auto-detect from remote URL
+	review = {
+		strategy = "checkout", -- "checkout" | "worktree" (not implemented yet)
+		view = "auto", -- "auto" | "diffview" | "quickfix" | "none"
+		auto_fetch = true, -- Fetch the source and target branches before checking out
+	},
 }
 
 -- Current configuration
@@ -41,6 +46,12 @@ end
 ---@return string remote The remote name (default: "origin")
 function M.get_remote()
 	return M.options.remote or defaults.remote
+end
+
+--- Get the review mode options
+---@return table review { strategy: string, view: string, auto_fetch: boolean }
+function M.get_review_opts()
+	return M.options.review or defaults.review
 end
 
 --- Get the configured GitLab URL or nil for auto-detection

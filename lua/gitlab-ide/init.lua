@@ -7,6 +7,7 @@ local git = require("gitlab-ide.git")
 local api = require("gitlab-ide.api")
 local ui = require("gitlab-ide.ui")
 local picker = require("gitlab-ide.picker")
+local review = require("gitlab-ide.review")
 
 --- Setup the plugin with user configuration
 ---@param opts table|nil User configuration options
@@ -274,6 +275,42 @@ function M.open_in_browser(range_start, range_end)
 	local url = string.format("%s/%s/-/blob/%s/%s%s", gitlab_url, project_path, branch, rel_path, line_anchor)
 
 	vim.ui.open(url)
+end
+
+--- Enter review mode for the current checkout
+--- Needs no GitLab token: the target ref is resolved from git alone.
+---@param target_ref string|nil Ref to diff against (default: the remote's default branch)
+function M.review_start(target_ref)
+	if target_ref and target_ref ~= "" then
+		review.start(target_ref)
+		return
+	end
+
+	local remote = config.get_remote()
+	local branch, branch_err = git.get_remote_default_branch(remote)
+	if not branch then
+		show_error(
+			string.format(
+				"%s. Pass a target ref explicitly, e.g. :GitlabIdeReview %s/master",
+				branch_err or "Could not determine the default branch",
+				remote
+			)
+		)
+		return
+	end
+
+	review.start(remote .. "/" .. branch)
+end
+
+--- Leave review mode and reset the diff base to HEAD
+function M.review_stop()
+	review.stop()
+end
+
+--- Whether review mode is currently active
+---@return boolean active
+function M.review_is_active()
+	return review.is_active()
 end
 
 return M
