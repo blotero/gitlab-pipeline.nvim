@@ -424,11 +424,13 @@ function M.fetch_branches(gitlab_url, token, project_path, callback)
 end
 
 
--- GraphQL query for fetching merge requests (paginated, filterable)
+-- GraphQL query for fetching merge requests (paginated, filterable).
+-- `in` is left out of the mergeRequests call on purpose: GitLab defaults it to
+-- [TITLE, DESCRIPTION], which is the scope $search should cover.
 local MR_LIST_QUERY = [[
-query($fullPath: ID!, $after: String, $state: MergeRequestState, $authorUsername: String) {
+query($fullPath: ID!, $after: String, $state: MergeRequestState, $authorUsername: String, $search: String) {
   project(fullPath: $fullPath) {
-    mergeRequests(state: $state, sort: UPDATED_DESC, first: 10, after: $after, authorUsername: $authorUsername) {
+    mergeRequests(state: $state, sort: UPDATED_DESC, first: 10, after: $after, authorUsername: $authorUsername, search: $search) {
       pageInfo {
         hasNextPage
         endCursor
@@ -542,15 +544,20 @@ end
 ---@param project_path string The project path
 ---@param callback function Callback function(err, merge_requests, page_info)
 ---@param after string|nil Cursor for pagination (nil for first page)
----@param filters table|nil { mr_state: string, author_username: string|nil }
+---@param filters table|nil { mr_state: string, author_username: string|nil, search: string|nil }
 function M.fetch_merge_requests(gitlab_url, token, project_path, callback, after, filters)
 	filters = filters or {}
 	local mr_state = filters.mr_state or "opened"
+	local search = filters.search
+	if search == "" then
+		search = nil
+	end
 	local vars = {
 		fullPath = project_path,
 		after = after or vim.NIL,
 		state = (mr_state == "all") and vim.NIL or mr_state,
 		authorUsername = filters.author_username or vim.NIL,
+		search = search or vim.NIL,
 	}
 	M.request(gitlab_url, token, MR_LIST_QUERY, vars, function(err, data)
 		if err then

@@ -100,6 +100,27 @@ This opens a multi-column floating window showing the pipeline for your current 
 | `r` | Refresh pipeline data |
 | `q` / `Esc` | Close pipeline view |
 
+### MR List View Keybindings
+
+| Key | Action |
+|-----|--------|
+| `Enter` | Open MR detail view |
+| `s` | Cycle state filter: opened → closed → merged → all |
+| `u` | Toggle the "mine" filter (MRs you authored) |
+| `/` | Search MRs by title or description (server-side, spans every page) |
+| `a` | Approve the MR under cursor (with confirmation) |
+| `o` | Open MR in browser |
+| `c` | Copy MR URL to clipboard |
+| `m` | Load the next page of MRs |
+| `r` | Refresh with the current filters |
+| `q` / `Esc` | Close MR views |
+
+Filters compose: `s`, `u` and `/` stack on one another, and the active set is
+shown in the window title. `/` prompts for a term (pre-filled with the current
+one) and submitting an empty prompt clears it. Because the search runs on
+GitLab's side it matches MRs you have not paged into the list yet - which is why
+it shadows Vim's own `/` in this buffer.
+
 ### MR Detail View Keybindings
 
 From the MR list, press `Enter` on a merge request to open its detail view.

@@ -36,7 +36,7 @@ local state = {
 	current_mr = nil,
 	has_next_page = false,
 	next_page_cursor = nil,
-	filters = { mr_state = "opened", author_username = nil },
+	filters = { mr_state = "opened", author_username = nil, search = nil },
 	current_username = nil,
 }
 
@@ -121,7 +121,7 @@ local function close_all()
 	close_list_view()
 	state.merge_requests = {}
 	state.api_context = nil
-	state.filters = { mr_state = "opened", author_username = nil }
+	state.filters = { mr_state = "opened", author_username = nil, search = nil }
 	state.current_username = nil
 end
 
@@ -130,6 +130,13 @@ local function get_window_title()
 	local parts = { state.filters.mr_state }
 	if state.filters.author_username then
 		table.insert(parts, "mine")
+	end
+	if state.filters.search then
+		local term = state.filters.search
+		if #term > 20 then
+			term = term:sub(1, 17) .. "..."
+		end
+		table.insert(parts, '"' .. term .. '"')
 	end
 	return " Merge Requests · " .. table.concat(parts, " | ") .. " "
 end
@@ -198,6 +205,9 @@ local function render_list(buf)
 			empty_msg = empty_msg .. " (mine)"
 		end
 		empty_msg = empty_msg .. " for state: " .. state.filters.mr_state
+		if state.filters.search then
+			empty_msg = empty_msg .. ' matching "' .. state.filters.search .. '"'
+		end
 		table.insert(lines, empty_msg)
 	end
 
@@ -216,7 +226,7 @@ local function render_list(buf)
 
 	-- Footer hint
 	table.insert(lines, "")
-	local hint = " ⏎:detail  s:state  u:mine  a:approve  o:browser  c:copy  m:more  r:refresh  q:close"
+	local hint = " ⏎:detail  s:state  u:mine  /:search  a:approve  o:browser  c:copy  m:more  r:refresh  q:close"
 	table.insert(lines, hint)
 	table.insert(highlights_to_apply, {
 		line = #lines - 1,
@@ -308,6 +318,19 @@ local function setup_list_keymaps(buf)
 			state.filters.author_username = state.current_username
 		end
 		refresh_list_with_filters()
+	end, opts)
+
+	-- Search by title/description. Server-side, so it spans every page rather
+	-- than the rows currently loaded - which is why it shadows vim's own "/".
+	vim.keymap.set("n", "/", function()
+		vim.ui.input({ prompt = "Search MRs: ", default = state.filters.search or "" }, function(input)
+			if input == nil then
+				return
+			end
+			local term = vim.trim(input)
+			state.filters.search = (term ~= "") and term or nil
+			refresh_list_with_filters()
+		end)
 	end, opts)
 
 	-- Drill down to detail
@@ -405,7 +428,7 @@ end
 ---@param merge_requests table List of merge request data
 ---@param api_context table API context { gitlab_url, token, project_path, username? }
 ---@param page_info table|nil { hasNextPage, endCursor } from the initial fetch
----@param initial_filters table|nil { mr_state, author_username }
+---@param initial_filters table|nil { mr_state, author_username, search }
 function M.open_list(merge_requests, api_context, page_info, initial_filters)
 	-- Close any existing MR views
 	close_all()
@@ -413,7 +436,7 @@ function M.open_list(merge_requests, api_context, page_info, initial_filters)
 	state.merge_requests = merge_requests
 	state.api_context = api_context
 	state.current_username = api_context.username
-	state.filters = initial_filters or { mr_state = "opened", author_username = nil }
+	state.filters = initial_filters or { mr_state = "opened", author_username = nil, search = nil }
 	state.has_next_page = page_info and page_info.hasNextPage or false
 	state.next_page_cursor = page_info and page_info.endCursor or nil
 
@@ -442,7 +465,7 @@ function M.open_list(merge_requests, api_context, page_info, initial_filters)
 		border = "rounded",
 		title = get_window_title(),
 		title_pos = "center",
-		footer = " s:state  u:mine  ⏎:detail  a:approve  o:browser  m:more  r:refresh  q:close ",
+		footer = " s:state  u:mine  /:search  ⏎:detail  a:approve  o:browser  m:more  r:refresh  q:close ",
 		footer_pos = "center",
 	})
 
